@@ -11,47 +11,160 @@ Comandos (via mensagem de texto no canal):
   v <0-100>   - ajusta o volume
 """
 
-# ── Monkey-patch: força URL fixa do SDK (v5.22a) ──────────────────────────────
-# A lib teamtalk.py tenta scraping buscando versão 5.15 (inexistente).
-# Sobrescrevemos download() para usar a URL correta antes de qualquer import.
+# ── Fix SDK: reescreve ttsdk_downloader.py antes de qualquer import ────────────
+# O downloader original usa VERSION_IDENTIFIER="5.15" (inexistente na página),
+# causando "list index out of range". Substituímos por URL direta da v5.22a.
 import os
 import sys
 import platform
+import importlib.util
+
+def _fix_sdk_downloader():
+    """Reescreve o arquivo ttsdk_downloader.py para usar URL fixa da v5.22a."""
+    spec = importlib.util.find_spec("teamtalk")
+    if spec is None:
+        return  # teamtalk não instalado, vai falhar depois
+    
+    pkg_dir = os.path.dirname(spec.origin)
+    target = os.path.join(pkg_dir, "tools", "ttsdk_downloader.py")
+    
+    if not os.path.exists(target):
+        print(f"[fix] Arquivo não encontrado: {target}")
+        return
+
+    new_content = '''"""Downloader fixado para usar SDK v5.22a diretamente (sem scraping)."""
+import os
+import platform
+import shutil
+import sys
+
+import patoolib
+import requests
+
+from . import downloader
+
+cd = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
-def _patched_download() -> None:
-    import requests
-
+def get_url_suffix_from_platform() -> str:
     machine = platform.machine()
-    if machine in ("AMD64", "x86_64"):
-        suffix = "ubuntu22_x86_64"
-    elif "arm" in machine:
-        suffix = "raspbian_armhf"
+    if sys.platform == "win32":
+        architecture = platform.architecture()
+        if machine == "AMD64" or machine == "x86":
+            if architecture[0] == "64bit":
+                return "win64"
+            else:
+                return "win32"
+        else:
+            sys.exit("Native Windows on ARM is not supported")
+    elif sys.platform == "darwin":
+        sys.exit("Darwin is not supported")
     else:
-        sys.exit(f"Arquitetura não suportada: {machine}")
+        if machine == "AMD64" or machine == "x86_64":
+            return "ubuntu22_x86_64"
+        elif "arm" in machine:
+            return "raspbian_armhf"
+        else:
+            sys.exit("Your architecture is not supported")
 
+
+def download() -> None:
+    suffix = get_url_suffix_from_platform()
     sdk_url = f"https://bearware.dk/teamtalksdk/v5.22a/tt5sdk_v5.22a_{suffix}.7z"
-    print(f"[patch] Baixando SDK de {sdk_url}")
-
-    import teamtalk.tools.ttsdk_downloader as _ttdl
-    cd = os.path.dirname(os.path.dirname(os.path.abspath(_ttdl.__file__)))
-    dest = os.path.join(cd, "ttsdk.7z")
-
-    r = requests.get(sdk_url, stream=True, timeout=120)
-    r.raise_for_status()
-    with open(dest, "wb") as f:
-        for chunk in r.iter_content(chunk_size=65536):
-            f.write(chunk)
-    print("[patch] Download concluído.")
+    print(f"[fix] Baixando SDK de {sdk_url}")
+    downloader.download_file(sdk_url, os.path.join(cd, "ttsdk.7z"))
+    print("[fix] Download concluido.")
 
 
-# Aplica o patch ANTES de qualquer import do teamtalk
-try:
-    import teamtalk.tools.ttsdk_downloader as _ttdl
-    _ttdl.download = _patched_download
-    print("[patch] SDK downloader corrigido para v5.22a.")
-except ImportError:
-    pass
+def extract() -> None:
+    try:
+        os.mkdir(os.path.join(cd, "ttsdk"))
+    except FileExistsError:
+        shutil.rmtree(os.path.join(cd, "ttsdk"))
+        os.mkdir(os.path.join(cd, "ttsdk"))
+    patoolib.extract_archive(os.path.join(cd, "ttsdk.7z"), outdir=os.path.join(cd, "ttsdk"))
+
+
+def move() -> None:
+    path = os.path.join(cd, "ttsdk", os.listdir(os.path.join(cd, "ttsdk"))[0])
+    libraries = ["TeamTalk_DLL", "TeamTalkPy"]
+    try:
+        os.makedirs(os.path.join(cd, "implementation"))
+    except FileExistsError:
+        shutil.rmtree(os.path.join(cd, "implementation"))
+        os.makedirs(os.path.join(cd, "implementation"))
+    for library in libraries:
+        try:
+            os.rename(
+                os.path.join(path, "Library", library),
+                os.path.join(cd, "implementation", library),
+            )
+        except OSError:
+            shutil.rmtree(os.path.join(cd, "implementation", library))
+            os.rename(
+                os.path.join(path, "Library", library),
+                os.path.join(cd, "implementation", library),
+            )
+        try:
+            os.remove(os.path.join(cd, "implementation", "__init__.py"))
+        except OSError:
+            pass
+        finally:
+            with open(os.path.join(cd, "implementation", "__init__.py"), "w") as f:
+                f.write("")
+
+
+def clean() -> None:
+    os.remove(os.path.join(cd, "ttsdk.7z"))
+    shutil.rmtree(os.path.join(cd, "ttsdk"))
+    shutil.rmtree(os.path.join(cd, "implementation", "TeamTalkPy", "test"))
+
+
+def install() -> None:
+    print("Installing TeamTalk sdk components")
+    try:
+        print("Downloading latest sdk version")
+        download()
+    except Exception as e:
+        print("Failed to download sdk. Error: ", e)
+        sys.exit(1)
+    try:
+        print("Downloaded. extracting")
+        extract()
+    except patoolib.util.PatoolError as e:
+        print("Failed to extract sdk. Error: ", e)
+        sys.exit(1)
+    print("Extracted. moving")
+    move()
+    if not os.path.exists(os.path.join(cd, "implementation", "TeamTalk_DLL")):
+        print("Failed to move TeamTalk_DLL")
+        sys.exit(1)
+    if not os.path.exists(os.path.join(cd, "implementation", "TeamTalkPy")):
+        print("Failed to move TeamTalkPy")
+        sys.exit(1)
+    print("moved. cleaning")
+    clean()
+    print("cleaned.")
+    print("Installed")
+    sys.exit(0)
+'''
+    
+    with open(target, "w") as f:
+        f.write(new_content)
+    
+    # Remove .pyc para forçar recompilação
+    pyc = target + "c"
+    if os.path.exists(pyc):
+        os.remove(pyc)
+    pycache = os.path.join(os.path.dirname(target), "__pycache__")
+    if os.path.exists(pycache):
+        import glob
+        for old in glob.glob(os.path.join(pycache, "ttsdk_downloader*.pyc")):
+            os.remove(old)
+    
+    print(f"[fix] ttsdk_downloader.py reescrito para usar v5.22a.")
+
+_fix_sdk_downloader()
 
 # ── Importações principais ────────────────────────────────────────────────────
 import asyncio
