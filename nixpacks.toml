@@ -2,4 +2,4 @@
 aaptPkgs = ["ffmpeg"]
 
 [start]
-cmd = "bash start.sh"
+cmd = "python bot.py"
