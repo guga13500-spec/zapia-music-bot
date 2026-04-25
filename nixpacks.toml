@@ -1,2 +1,5 @@
 [phases.setup]
 aaptPkgs = ["ffmpeg"]
+
+[start]
+cmd = "bash start.sh"
