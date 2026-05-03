@@ -47,7 +47,7 @@ SERVER = {
 
 ELEVENLABS_API_KEY = os.environ.get("ELEVENLABS_API_KEY", "")
 ELEVENLABS_VOICE_ID = "nPczCjzI2devNBz1zQrb"  # Brian - voz masculina profunda
-OPENWEATHER_API_KEY = os.environ.get("OPENWEATHER_API_KEY", "")
+# wttr.in - sem chave necessária
 
 AJUDA = (
     "=== ZapiaMusic - Comandos ===\n"
@@ -176,26 +176,39 @@ async def falar_no_canal(tt, canal, texto: str):
         await loop.run_in_executor(None, streamer_atual.stream_file, arquivo)
 
 
-# ── Clima ──────────────────────────────────────────────────────────────────────
+# ── Clima (wttr.in — sem chave necessária) ────────────────────────────────────
+TRADUCOES_CLIMA = {
+    "Sunny": "Ensolarado", "Clear": "Céu limpo", "Cloudy": "Nublado",
+    "Partly cloudy": "Parcialmente nublado", "Overcast": "Encoberto",
+    "Rain": "Chuva", "Light rain": "Chuva fraca", "Heavy rain": "Chuva forte",
+    "Thunderstorm": "Tempestade", "Snow": "Neve", "Fog": "Neblina",
+    "Mist": "Névoa", "Blizzard": "Nevasca", "Drizzle": "Garoa",
+    "Patchy rain possible": "Possibilidade de chuva isolada",
+    "Moderate rain": "Chuva moderada", "Light snow": "Neve fraca",
+    "Heavy snow": "Neve forte", "Patchy snow possible": "Possibilidade de neve",
+    "Freezing drizzle": "Garoa congelante", "Light sleet": "Granizo fraco",
+    "Moderate or heavy rain shower": "Pancadas de chuva",
+    "Torrential rain shower": "Chuva torrencial",
+    "Patchy light rain": "Chuva fraca isolada",
+    "Light drizzle": "Garoa fraca",
+}
+
 def get_clima(cidade: str) -> str:
-    if not OPENWEATHER_API_KEY:
-        return "API de clima não configurada ainda."
     try:
-        url = (
-            f"https://api.openweathermap.org/data/2.5/weather"
-            f"?q={urllib.parse.quote(cidade)}"
-            f"&appid={OPENWEATHER_API_KEY}&units=metric&lang=pt_br"
-        )
+        cidade_enc = urllib.parse.quote(cidade)
+        url = f"https://wttr.in/{cidade_enc}?format=j1"
         resp = requests.get(url, timeout=10)
+        resp.raise_for_status()
         d = resp.json()
-        if resp.status_code == 200:
-            desc = d["weather"][0]["description"]
-            temp = d["main"]["temp"]
-            sensacao = d["main"]["feels_like"]
-            humid = d["main"]["humidity"]
-            return f"Clima em {cidade}: {desc}, {temp:.1f}°C (sensação {sensacao:.1f}°C), umidade {humid}%"
-        else:
-            return f"Cidade '{cidade}' não encontrada."
+        w = d["current_condition"][0]
+        area = d["nearest_area"][0]["areaName"][0]["value"]
+        pais = d["nearest_area"][0]["country"][0]["value"]
+        temp = w["temp_C"]
+        feels = w["FeelsLikeC"]
+        humid = w["humidity"]
+        desc = w["weatherDesc"][0]["value"]
+        desc_pt = TRADUCOES_CLIMA.get(desc, desc)
+        return f"Clima em {area}, {pais}: {desc_pt}, {temp}°C (sensação {feels}°C), umidade {humid}%"
     except Exception as e:
         return f"Erro ao buscar clima: {e}"
 
