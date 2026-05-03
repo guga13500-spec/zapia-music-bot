@@ -10,13 +10,15 @@ Comandos:
   s            - para música
   v <0-100>    - volume
   falar <texto>- bot fala via ElevenLabs TTS
-  piada        - conta uma piada
-  zoar <nome>  - zoação leve de alguém
+  piada        - conta uma piada sem censura
+  piada seca   - piada mais pesada
+  zoar <nome>  - zoação pesada de alguém
   clima <cidade>- previsão do tempo
   hora         - hora atual
   dado <N>     - rola um dado de N lados
   cara ou coroa- joga cara ou coroa
   contagem <N> - contagem regressiva falada
+  xingar <nome>- xingamento criativo
 """
 
 import asyncio
@@ -55,8 +57,10 @@ AJUDA = (
     "s               - para música\n"
     "v <0-100>       - volume (ex: v 80)\n"
     "falar <texto>   - bot fala em voz alta\n"
-    "piada           - conta uma piada\n"
+    "piada           - piada aleatória\n"
+    "piada seca      - piada mais pesada\n"
     "zoar <nome>     - zoação de alguém\n"
+    "xingar <nome>   - xingamento criativo\n"
     "clima <cidade>  - previsão do tempo\n"
     "hora            - hora atual\n"
     "dado <N>        - rola dado de N lados\n"
@@ -68,27 +72,61 @@ PIADAS = [
     "Por que o esqueleto não consegue namorar? Porque não tem coragem!",
     "O que o zero disse para o oito? Bonito cinto!",
     "Por que o livro de matemática é o mais triste? Porque tem muitos problemas.",
-    "Sabe por que o computador foi ao médico? Porque tinha vírus!",
-    "O que o elefante disse para o outro elefante? Nada! Elefante não fala!",
-    "Por que o músico quebrou o violão? Porque queria um som mais pesado!",
-    "Qual é o animal mais antigo? A zebra, porque ainda está em preto e branco.",
-    "Por que a bruxa não usa calcinha? Para ter melhor aderência na vassoura!",
-    "O que o surdo falou para o cego? Não ouço nada do que você não vê.",
     "Por que o homem jogou o relógio pela janela? Queria ver o tempo voar!",
-    "Por que homem não sabe dar ponto final? Porque sempre termina em vírgula, aguardando resposta.",
+    "O que é um homem nu em cima de uma árvore? Um galho diferente!",
+    "Por que a bruxa não usa calcinha? Para ter melhor aderência na vassoura!",
+    "O que é um homem solteiro dentro de uma banheira? Um solteiro ensopado.",
     "Como se chama um bêbado honesto? Álcool sincero!",
+    "Por que o homem casado não pode ir à academia? Porque quando sai de casa já está de saco cheio.",
+    "O que é um cego num cemitério? Perdido entre os mortos.",
+    "Qual a diferença entre um marido e um batom? O batom fica quieto na bolsa.",
+    "O que o pato disse para a pata? Me dá um bico.",
+    "Por que homem solteiro acorda cedo? Porque não tem ninguém pra acordar ele tarde.",
+    "O que é um peixe sem olho? Um pxe.",
+    "Por que mulher não sabe estacionar? Porque desde pequena aprenderam que 30 centímetros são um metro.",
+]
+
+PIADAS_SECAS = [
+    "Qual a diferença entre um homem e um computador? O computador executa o que você manda.",
+    "Como se chama um grupo de homens inteligentes? Ficção científica.",
+    "Por que o viúvo sorri no enterro da esposa? Porque sabe que vai dormir tranquilo essa noite.",
+    "Qual o animal que mais mente? O solteiro — diz que não precisa de ninguém.",
+    "O que é pior que encontrar uma barata no seu sanduíche? Encontrar metade.",
+    "Qual é a diferença entre sogra e terrorista? Com terrorista dá pra negociar.",
+    "Por que o Brasil não vai à Copa do Mundo de futsal? Porque tem mais coisa séria pra fazer. Brincadeira, vai sim.",
+    "O que é um homem afogando? Problema de nado. O que são dois homens afogando? Problema dobrado.",
+    "Como se diz 'marido obediente' em inglês? Ficção.",
+    "O que é um homem de gravata? Um idiota com cabresto.",
 ]
 
 ZOAÇÕES = [
+    "é tão feio que quando nasceu o médico errou quem dar a palmada.",
+    "é tão burro que levou régua pra cama pra ver quanto dormiu.",
+    "é tão chato que até o Google fecha a aba quando ele abre.",
     "é tão lento que quando nasceu a parteira perguntou: é menino ou menina? Ele disse: depende do dia!",
-    "é tão estranho que o Google não sabe o que fazer com ele!",
     "é tão atrasado que chega ontem na reunião de hoje!",
-    "é tão confuso que fica perdido dentro da própria casa!",
-    "é tão sortudo no azar que se cair em pé ainda acerta o joelho!",
-    "tem tanto papo que a rádio fica com ciúmes!",
-    "é tão devagar que a tartaruga manda cartão de aniversário com antecedência pra ele!",
-    "é tão teimoso que discute com o GPS!",
-    "é tão preguiçoso que respira só quando precisa!",
+    "é tão preguiçoso que respira só quando precisa.",
+    "é tão sem graça que o Wi-Fi desconecta quando ele chega.",
+    "tem cara de quem usa calcinha da sogra achando que é sua.",
+    "é tão feio que a câmera do celular pede confirmação antes de fotografar.",
+    "tem mais papo que resultado — igual a político em campanha.",
+    "é tão confuso que já se perdeu dentro de um corredor.",
+    "é tão inútil que o Google não sabe o que fazer com ele.",
+]
+
+XINGAMENTOS = [
+    "{nome}, vai tomar no cu!",
+    "{nome}, você é um tremendo otário.",
+    "{nome}, sua besta quadrada.",
+    "{nome}, vai se lascar.",
+    "{nome}, você é inútil como sinal de wi-fi em área rural.",
+    "{nome}, seu pé rapado.",
+    "{nome}, você é mais perdido que cego em tiroteio.",
+    "{nome}, sua bunda mole.",
+    "{nome}, vai catar coquinho.",
+    "{nome}, você é um lixo com pernas.",
+    "{nome}, cresce, idiota.",
+    "{nome}, você não presta nem pra fazer companhia.",
 ]
 
 # ── Estado global ──────────────────────────────────────────────────────────────
@@ -98,7 +136,6 @@ streamer_atual = None
 
 # ── TTS via ElevenLabs ─────────────────────────────────────────────────────────
 def tts_para_arquivo(texto: str):
-    """Gera áudio TTS e retorna caminho do arquivo temporário."""
     if not ELEVENLABS_API_KEY:
         logging.warning("ELEVENLABS_API_KEY não configurada")
         return None
@@ -132,20 +169,17 @@ def tts_para_arquivo(texto: str):
 
 
 async def falar_no_canal(tt, canal, texto: str):
-    """Gera TTS e transmite no canal TeamTalk."""
     canal.send_message(f"[TTS] {texto}")
     loop = asyncio.get_event_loop()
     arquivo = await loop.run_in_executor(None, tts_para_arquivo, texto)
     if arquivo and streamer_atual:
         await loop.run_in_executor(None, streamer_atual.stream_file, arquivo)
-    elif arquivo:
-        logging.info(f"Arquivo TTS gerado mas sem streamer: {arquivo}")
 
 
 # ── Clima ──────────────────────────────────────────────────────────────────────
 def get_clima(cidade: str) -> str:
     if not OPENWEATHER_API_KEY:
-        return f"API de clima não configurada ainda. Em breve!"
+        return "API de clima não configurada ainda."
     try:
         url = (
             f"https://api.openweathermap.org/data/2.5/weather"
@@ -231,12 +265,29 @@ async def on_message(tt, msg):
         canal.send_message(f"Jogando a moeda... {resultado}!")
         return
 
+    # ── piada seca ────────────────────────────────────────────────────────────
+    if texto.lower() == "piada seca":
+        piada = random.choice(PIADAS_SECAS)
+        canal.send_message(piada)
+        if ELEVENLABS_API_KEY:
+            await falar_no_canal(tt, canal, piada)
+        return
+
     # ── piada ─────────────────────────────────────────────────────────────────
     if texto.lower() == "piada":
         piada = random.choice(PIADAS)
         canal.send_message(piada)
         if ELEVENLABS_API_KEY:
             await falar_no_canal(tt, canal, piada)
+        return
+
+    # ── xingar <nome> ─────────────────────────────────────────────────────────
+    if texto.lower().startswith("xingar "):
+        nome = texto[7:].strip()
+        xingo = random.choice(XINGAMENTOS).replace("{nome}", nome)
+        canal.send_message(xingo)
+        if ELEVENLABS_API_KEY:
+            await falar_no_canal(tt, canal, xingo)
         return
 
     # ── zoar <nome> ───────────────────────────────────────────────────────────
